@@ -1,0 +1,72 @@
+networks:
+  elasticnetwork:
+    driver: bridge
+services:
+  elasticsearch:
+    container_name: es01
+    environment:
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.3.3
+    networks:
+      elasticnetwork: {}
+    ports:
+    - published: 9200
+      target: 9200
+    volumes:
+    - elasticsearch-data:/usr/share/elasticsearch/datafile:rw
+  elasticsearchdemo:
+    build:
+      context: D:\PracticeProjects\ElasticSearch\ElasticSearchDemo
+      dockerfile: ElasticSearchDemo/Dockerfile
+      labels:
+        com.microsoft.created-by: visual-studio
+        com.microsoft.visual-studio.project-name: ElasticSearchDemo
+      target: base
+    container_name: ElasticSearchDemo
+    entrypoint: tail -f /dev/null
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_LOGGING__CONSOLE__DISABLECOLORS: "true"
+      DOTNET_USE_POLLING_FILE_WATCHER: '1'
+      NUGET_FALLBACK_PACKAGES: ''
+    image: elasticsearchdemo:dev
+    labels:
+      com.microsoft.visualstudio.debuggee.arguments: ' --additionalProbingPath /root/.nuget/packages  "/app/bin/Debug/netcoreapp3.1/ElasticSearchDemo.dll"'
+      com.microsoft.visualstudio.debuggee.killprogram: /bin/sh -c "if PID=$$(pidof
+        dotnet); then kill $$PID; fi"
+      com.microsoft.visualstudio.debuggee.program: dotnet
+      com.microsoft.visualstudio.debuggee.workingdirectory: /app
+    networks:
+      elasticnetwork: {}
+    ports:
+    - published: 6464
+      target: 80
+    - target: 80
+    tty: true
+    volumes:
+    - D:\PracticeProjects\ElasticSearch\ElasticSearchDemo\ElasticSearchDemo:/app:rw
+    - C:\Users\vinay.pant\vsdbg\vs2017u5:/remote_debugger:rw
+    - C:\Users\vinay.pant\AppData\Roaming\ASP.NET\Https:/root/.aspnet/https:ro
+    - C:\Users\vinay.pant\AppData\Roaming\Microsoft\UserSecrets:/root/.microsoft/usersecrets:ro
+    - C:\Users\vinay.pant\.nuget\packages:/root/.nuget/packages:ro
+    - D:\PracticeProjects\ElasticSearch\ElasticSearchDemo:/src:rw
+  kibana:
+    container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_started
+    environment:
+      ELASTICSEARCH_HOSTS: http://es01:9200
+      ELASTICSEARCH_URL: http://es01:9200
+    image: docker.elastic.co/kibana/kibana:8.3.3
+    networks:
+      elasticnetwork: {}
+    ports:
+    - published: 5601
+      target: 5601
+version: '3.4'
+volumes:
+  elasticsearch-data:
+    driver: local

@@ -1,0 +1,180 @@
+﻿ URL:https://hassantariqblog.wordpress.com/category/back-end-stuff/elastic-search/
+ https://engineering.carsguide.com.au/elasticsearch-demystifying-the-bool-query-11da737a4efb
+ https://www.elastic.co/guide/en/elasticsearch/client/net-api/current/multi-fields.html
+ https://www.humankode.com/asp-net-core/logging-with-elasticsearch-kibana-asp-net-core-and-docker/
+
+ https://rimdev.io/working-with-nested-aggregates-using-nest-and-elasticsearch/
+ https://lynn-kwong.medium.com/learn-advanced-crud-and-search-queries-for-nested-objects-in-elasticsearch-from-practical-examples-7aebc1408d6f
+
+ https://linuxhint.com/elasticsearch-nested-query/
+
+ Aggregations-?
+
+ It is often useful to index the same field in Elasticsearch in different ways, to serve different purposes, for example,
+ mapping a POCO string property as a text datatype for full text search as well as mapping as a keyword datatype for structured search,
+ sorting and aggregations.
+
+ POCO string is automatically mapped to both a keyword and a text field.
+
+ Coerce
+      ----------
+    Data is not always clean. Depending on how it is produced a number might be rendered in the JSON body as a true
+    JSON number, e.g. 5, but it might also be rendered as a string, e.g. "5". Alternatively, a number that should be an integer might instead be rendered as a floating point, e.g. 5.0, or even "5.0".
+    Coercion attempts to clean up dirty values to fit the data type of a field. For instance:
+
+    Strings will be coerced to numbers.
+    Floating points will be truncated for integer values.
+
+    Ignoremalformed
+    -----------------
+
+    Keyword vs Text – Full vs. Partial Matches
+    ---------------------------------------
+    The primary difference between the text datatype and the keyword datatype is that text fields are analyzed at the time of indexing,
+    and keyword fields are not. What that means is, text fields are broken down into their individual terms at indexing to allow for 
+    partial matching, while keyword fields are indexed as is. 
+    For example, a text field containing the value “Roosters crow everyday” would get all of its individual components indexed:
+    “Roosters”, “crow”, and “everyday”; a query on any of those terms would return this string. 
+    
+    However, if the same string was stored as a keyword type, it would not get broken down. Only a search for the exact 
+    string “Roosters crow everyday” would return it as a result. Because text fields are analyzed in this way,
+    one consequence is that they’re not able to be sorted alphabetically.
+    A keyword field, on the other hand, can be sorted alphabetically in the typical fashion.
+
+
+Text type fields are analyzed by analyzer and further  tokenized by token to break that text into
+individual words and create inverted index.
+ 
+->Text type fields if used in aggregation queries or any calculation or count person than will produce errors
+    because analyzer uses it so in that case we have to use field.keyword to pick the field not data of the field.
+  
+
+Note:
+--------
+While document indexing or inserting the document elastic search does the 
+[ Analyzation,filteration(removing stop words) ,tokenization ] in the backend based on the mapping of type associated with 
+properties.
+
+MATCH QUERY
+----------
+->Recognized by analyzer so broken down into individual term. So now out of all broken words if any one matches with the stored
+  index than that  document is returned.
+->Here thing to be note down is that text fields are analyzed so at the time of indexing elastic search had already prepared a list
+  of all individual words as indexes/indices.
+
+ Eg: "Yasir dab"  or "Ya dabru " will produce the results.
+
+->Not case-sensitive.
+
+
+TERM QUERY
+----------
+->Not recognized by analyzer so not broken down into individual term.
+
+
+ Eg: A query of string "Yasir Dabru" would be taken as a whole not broken into diff. words so it would match the whole sentence
+     with the stored indexes .
+
+->Here thing to be note down is that text fields are analyzed so at the time of indexing elastic search had already prepared a list
+  of all individual words as indexes/indices,
+  so when elastic search will compare the whole term that is "Yasir dabru" with stored indexes  it would not fetch any document because
+  there are no indexes where "Yasir" and "dabru" both words are present together.
+
+->Term query is also case-sensitive.
+
+Scoring effect on term query   ?
+---------------
+
+
+1.Term query
+
+   var response = await _elasticClient.SearchAsync<ElasticEmployee>(q =>
+   q.From(0)
+  .Size(10)
+  .Index("employee")   //comma separated indexes /_all /Indices.All
+  .Query(q => q.Term(t => t.Email, "yasir")));
+
+2.Match query
+
+  var response = await _elasticClient.SearchAsync<ElasticEmployee>(q =>
+  q.From(0)
+ .Size(10)
+ .Index("employee")   
+ .Query(q => q.Match(w=>w.Field(f=>f.Skills.Select(q=>q.Name)).Query("Advance"))));
+
+3.Complex query
+  --------------
+  a.To return docs where age is=25 or 33 and salary >5000
+
+    var response = await _elasticClient.SearchAsync<ElasticEmployee>(q =>
+            q.From(0)
+            .Size(10)
+            .Index("employee")
+            .Query(q =>
+               q.Bool(
+                   q =>
+                   q.Must(
+
+                         q => q.Bool(q => q.Should(q => q.Term(q => q.Age, 25), q => q.Term(q => q.Age, 33))),
+                         q => q.Bool(q => q.Filter(q => q.Range(q => q.Field(q => q.Salary).GreaterThanOrEquals(5000))))
+                       )
+
+               ))
+            //.Sort(q => q.Field(q => q.Salary, SortOrder.Ascending)));
+            .Sort(q => q.Ascending(q => q.Name.Suffix("keyword"))));
+
+Bool queries
+------------
+must:  like and , should : like or , must not , filter: no effect on scoring
+           
+How Array is handled in Elastic search
+-------------------------
+PUT /my_index/blogpost/1
+{
+  "title": "Nest eggs",
+  "body":  "Making your money work...",
+  "tags":  [ "cash", "shares" ],
+  "comments": [ 
+    {
+      "name":    "John Smith",
+      "comment": "Great article",
+      "age":     28,
+      "stars":   4,
+      "date":    "2014-09-01"
+    },
+    {
+      "name":    "Alice White",
+      "comment": "More like this please",
+      "age":     31,
+      "stars":   5,
+      "date":    "2014-10-22"
+    }
+  ]
+}
+
+The problem is that the preceding document would match a query like this:
+
+GET /_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "match": { "comments.name": "Alice" }},
+        { "match": { "comments.age":  28      }} 
+      ]
+    }
+  }
+}
+
+The reason for this cross-object matching, as discussed in Arrays of Inner Objects, is that our beautifully structured JSON document is flattened into a simple key-value format in the index that looks like this:
+
+{
+  "title":            [ eggs, nest ],
+  "body":             [ making, money, work, your ],
+  "tags":             [ cash, shares ],
+  "comments.name":    [ alice, john, smith, white ],
+  "comments.comment": [ article, great, like, more, please, this ],
+  "comments.age":     [ 28, 31 ],
+  "comments.stars":   [ 4, 5 ],
+  "comments.date":    [ 2014-09-01, 2014-10-22 ]
+}
